@@ -1,26 +1,33 @@
 import { NextResponse } from "next/server";
 
-const demoMessages = [
-  { id: "wa-1", channel: "WhatsApp", customer: "New inquiry", preview: "Hi, is the black sofa still available?", time: "Just now", unread: true },
-  { id: "fb-1", channel: "Facebook", customer: "Facebook customer", preview: "How much is delivery to Kampala?", time: "8 min ago", unread: true },
-  { id: "wa-2", channel: "WhatsApp", customer: "Returning customer", preview: "I would like two pieces.", time: "24 min ago", unread: false }
-];
+const messages = [];
+const customers = new Map();
 
 export async function GET() {
-  return NextResponse.json({ ok: true, messages: demoMessages });
+  return NextResponse.json({ ok: true, messages, customers: [...customers.values()] });
 }
 
 export async function POST(request) {
   const body = await request.json().catch(() => ({}));
-  return NextResponse.json({
-    ok: true,
-    message: {
-      id: crypto.randomUUID(),
-      channel: body.channel || "WhatsApp",
-      customer: body.customer || "New customer",
-      preview: body.message || "",
-      time: "Just now",
-      unread: true
-    }
-  }, { status: 201 });
+  const message = {
+    id: body.id || crypto.randomUUID(),
+    messageId: body.messageId || body.id || null,
+    channel: body.channel || "Unknown",
+    externalId: body.externalId || "unknown",
+    customerName: body.customerName || body.customer || `${body.channel || "Social"} customer`,
+    text: body.text || body.message || "",
+    timestamp: body.timestamp || new Date().toISOString(),
+    direction: body.direction || "inbound"
+  };
+  if (!messages.some(x => message.messageId && x.messageId === message.messageId)) messages.unshift(message);
+  const key = `${message.channel}:${message.externalId}`;
+  const existing = customers.get(key) || {
+    id: crypto.randomUUID(), channel: message.channel, externalId: message.externalId,
+    name: message.customerName, status: "New", messages: []
+  };
+  existing.name = message.customerName || existing.name;
+  existing.updatedAt = new Date().toISOString();
+  existing.messages.push(message);
+  customers.set(key, existing);
+  return NextResponse.json({ ok: true, message, customer: existing }, { status: 201 });
 }
